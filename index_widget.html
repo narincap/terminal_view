@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Timeframe Chart Viewer</title>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            background: #0a0a0a;
+            color: #ffffff;
+            min-height: 100vh;
+        }
+
+        .toolbar {
+            background: #1a1a1a;
+            border-bottom: 1px solid #2a2a2a;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .toolbar-label {
+            color: #888;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        input[type="text"] {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            color: #fff;
+            padding: 8px 12px;
+            font-size: 14px;
+            width: 180px;
+            font-family: monospace;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #0066cc;
+        }
+
+        button {
+            background: #0066cc;
+            border: none;
+            color: #fff;
+            padding: 8px 16px;
+            font-size: 13px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        button:hover {
+            background: #0052a3;
+        }
+
+        .btn-secondary {
+            background: #2a2a2a;
+            border: 1px solid #3a3a3a;
+        }
+
+        .btn-secondary:hover {
+            background: #3a3a3a;
+        }
+
+        .quick-stocks {
+            display: flex;
+            gap: 8px;
+        }
+
+        .quick-stock-btn {
+            background: transparent;
+            border: 1px solid #333;
+            color: #888;
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        .quick-stock-btn:hover {
+            background: #1a1a1a;
+            color: #fff;
+            border-color: #0066cc;
+        }
+
+        .chart-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(600px, 1fr));
+            gap: 1px;
+            background: #0a0a0a;
+        }
+
+        .chart-panel {
+            background: #0f0f0f;
+            border: 1px solid #1a1a1a;
+            position: relative;
+        }
+
+        .panel-header {
+            background: #1a1a1a;
+            border-bottom: 1px solid #2a2a2a;
+            padding: 8px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .panel-header select {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            color: #fff;
+            padding: 6px 10px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .btn-remove {
+            background: transparent;
+            border: none;
+            color: #666;
+            padding: 4px 8px;
+            font-size: 11px;
+        }
+
+        .btn-remove:hover {
+            color: #ff4444;
+        }
+
+        .chart-container {
+            width: 100%;
+            height: 500px;
+            position: relative;
+        }
+
+        @media (max-width: 1024px) {
+            .chart-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .status-bar {
+            background: #1a1a1a;
+            border-top: 1px solid #2a2a2a;
+            padding: 6px 20px;
+            font-size: 11px;
+            color: #666;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <span class="toolbar-label">Symbol</span>
+        <input type="text" id="stock-input" placeholder="BBCA.JK" value="BBCA">
+        <button id="load-btn">LOAD</button>
+        <button id="add-panel-btn" class="btn-secondary">+ PANEL</button>
+
+        <div style="flex: 1"></div>
+
+        <div class="quick-stocks">
+            <button class="quick-stock-btn" onclick="loadStock('BBCA')">BBCA</button>
+            <button class="quick-stock-btn" onclick="loadStock('TLKM')">TLKM</button>
+            <button class="quick-stock-btn" onclick="loadStock('ASII')">ASII</button>
+            <button class="quick-stock-btn" onclick="loadStock('BMRI')">BMRI</button>
+            <button class="quick-stock-btn" onclick="loadStock('BBRI')">BBRI</button>
+            <button class="quick-stock-btn" onclick="loadStock('GOTO')">GOTO</button>
+        </div>
+    </div>
+
+    <div id="chart-grid" class="chart-grid"></div>
+
+    <div class="status-bar">Powered by TradingView</div>
+
+    <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+    <script>
+        const TIMEFRAMES = {
+            '1': '1 Minute',
+            '5': '5 Minutes',
+            '15': '15 Minutes',
+            '30': '30 Minutes',
+            '60': '1 Hour',
+            '240': '4 Hours',
+            'D': '1 Day',
+            'W': '1 Week',
+            '1M': '1 Month',
+            '3M': '3 Months',
+            '6M': '6 Months',
+            '12M': '12 Months',
+            '24M': '24 Months',
+            '36M': '36 Months'
+        };
+
+        const appState = {
+            symbol: 'IDX:BBCA',
+            panels: [],
+            nextPanelId: 1
+        };
+
+        function addPanel(timeframe = '15') {
+            const panelId = appState.nextPanelId++;
+
+            const panel = {
+                id: panelId,
+                timeframe: timeframe,
+                widget: null
+            };
+
+            appState.panels.push(panel);
+            renderPanel(panel);
+        }
+
+        function renderPanel(panel) {
+            const grid = document.getElementById('chart-grid');
+
+            const panelElement = document.createElement('div');
+            panelElement.id = `panel-${panel.id}`;
+            panelElement.className = 'chart-panel';
+
+            const header = document.createElement('div');
+            header.className = 'panel-header';
+
+            const select = document.createElement('select');
+            select.id = `timeframe-${panel.id}`;
+            Object.keys(TIMEFRAMES).forEach(tf => {
+                const option = document.createElement('option');
+                option.value = tf;
+                option.textContent = TIMEFRAMES[tf];
+                option.selected = tf === panel.timeframe;
+                select.appendChild(option);
+            });
+            select.addEventListener('change', () => onTimeframeChange(panel.id));
+
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'btn-remove';
+            removeBtn.textContent = '✕';
+            removeBtn.addEventListener('click', () => removePanel(panel.id));
+
+            header.appendChild(select);
+            header.appendChild(removeBtn);
+
+            const chartContainer = document.createElement('div');
+            chartContainer.id = `chart-${panel.id}`;
+            chartContainer.className = 'chart-container';
+
+            panelElement.appendChild(header);
+            panelElement.appendChild(chartContainer);
+            grid.appendChild(panelElement);
+
+            createChart(panel);
+        }
+
+        function createChart(panel) {
+            const containerId = `chart-${panel.id}`;
+
+            if (panel.widget) {
+                panel.widget.remove();
+            }
+
+            panel.widget = new TradingView.widget({
+                autosize: true,
+                symbol: appState.symbol,
+                interval: panel.timeframe,
+                timezone: "Asia/Jakarta",
+                theme: "dark",
+                style: "1",
+                locale: "en",
+                toolbar_bg: "#0f0f0f",
+                enable_publishing: false,
+                hide_side_toolbar: false,
+                allow_symbol_change: false,
+                container_id: containerId,
+                backgroundColor: "#0a0a0a",
+                gridColor: "#1a1a1a",
+                hide_top_toolbar: false,
+                save_image: false,
+                studies: []
+            });
+        }
+
+        function removePanel(panelId) {
+            if (appState.panels.length <= 1) {
+                alert('Cannot remove last panel');
+                return;
+            }
+
+            const panel = appState.panels.find(p => p.id === panelId);
+            if (panel && panel.widget) {
+                panel.widget.remove();
+            }
+
+            appState.panels = appState.panels.filter(p => p.id !== panelId);
+            document.getElementById(`panel-${panelId}`).remove();
+        }
+
+        function onTimeframeChange(panelId) {
+            const panel = appState.panels.find(p => p.id === panelId);
+            if (!panel) return;
+
+            const select = document.getElementById(`timeframe-${panelId}`);
+            panel.timeframe = select.value;
+            createChart(panel);
+        }
+
+        function loadAllCharts() {
+            const input = document.getElementById('stock-input');
+            let symbol = input.value.trim().toUpperCase();
+
+            if (!symbol) {
+                alert('Enter a stock symbol');
+                return;
+            }
+
+            // Convert to TradingView format
+            appState.symbol = `IDX:${symbol}`;
+
+            // Reload all panels
+            appState.panels.forEach(panel => {
+                createChart(panel);
+            });
+        }
+
+        function loadStock(symbol) {
+            document.getElementById('stock-input').value = symbol;
+            loadAllCharts();
+        }
+
+        // Initialize
+        document.getElementById('load-btn').addEventListener('click', loadAllCharts);
+        document.getElementById('add-panel-btn').addEventListener('click', () => addPanel());
+        document.getElementById('stock-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') loadAllCharts();
+        });
+
+        // Add default panels
+        addPanel('15');
+        addPanel('D');
+    </script>
+</body>
+</html>

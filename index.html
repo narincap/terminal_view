@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Timeframe Chart Viewer</title>
+    <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Trebuchet MS', Roboto, Ubuntu, sans-serif;
+            background: #0e1015;
+            color: #d1d4dc;
+            min-height: 100vh;
+        }
+
+        .toolbar {
+            background: #1e222d;
+            border-bottom: 1px solid #2b2b43;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .toolbar-label {
+            color: #888;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .search-container {
+            position: relative;
+        }
+
+        input[type="text"] {
+            background: #131722;
+            border: 1px solid #2b2b43;
+            color: #d1d4dc;
+            padding: 8px 12px;
+            font-size: 14px;
+            width: 300px;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #2962ff;
+        }
+
+        .autocomplete-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #1e222d;
+            border: 1px solid #2b2b43;
+            border-top: none;
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+        }
+
+        .autocomplete-dropdown.show {
+            display: block;
+        }
+
+        .autocomplete-item {
+            padding: 10px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid #2b2b43;
+        }
+
+        .autocomplete-item:hover {
+            background: #2962ff;
+        }
+
+        .autocomplete-item .symbol {
+            font-weight: 600;
+            color: #d1d4dc;
+        }
+
+        .autocomplete-item .name {
+            color: #758696;
+            font-size: 12px;
+            margin-left: 8px;
+        }
+
+        .autocomplete-item .exchange {
+            float: right;
+            color: #758696;
+            font-size: 11px;
+        }
+
+        button {
+            background: #2962ff;
+            border: none;
+            color: #fff;
+            padding: 8px 16px;
+            font-size: 13px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        button:hover {
+            background: #1e53e5;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: #363a45;
+            border: 1px solid #434651;
+        }
+
+        .btn-secondary:hover {
+            background: #434651;
+        }
+
+        .quick-stocks {
+            display: flex;
+            gap: 8px;
+        }
+
+        .quick-stock-btn {
+            background: transparent;
+            border: 1px solid #2b2b43;
+            color: #758696;
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        .quick-stock-btn:hover {
+            background: #2962ff;
+            color: #fff;
+            border-color: #2962ff;
+        }
+
+        .chart-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 1px;
+            background: #0a0a0a;
+        }
+
+        .chart-panel {
+            background: #131722;
+            border: 1px solid #2b2b43;
+        }
+
+        .panel-header {
+            background: #1e222d;
+            border-bottom: 1px solid #2b2b43;
+            padding: 8px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .panel-header select {
+            background: #131722;
+            border: 1px solid #2b2b43;
+            color: #d1d4dc;
+            padding: 6px 10px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .btn-remove {
+            background: transparent;
+            border: none;
+            color: #758696;
+            padding: 4px 8px;
+            font-size: 11px;
+        }
+
+        .btn-remove:hover {
+            color: #f23645;
+        }
+
+        .chart-container {
+            width: 100%;
+            height: 450px;
+            position: relative;
+            background: #131722;
+        }
+
+        .loading-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(19, 23, 34, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .spinner {
+            width: 30px;
+            height: 30px;
+            border: 2px solid #2b2b43;
+            border-top-color: #2962ff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            margin-top: 12px;
+            color: #758696;
+            font-size: 12px;
+        }
+
+        .error-message {
+            padding: 20px;
+            background: #2a1a1a;
+            color: #f23645;
+            text-align: center;
+            font-size: 13px;
+        }
+
+        .error-message button {
+            margin-top: 12px;
+        }
+
+        .empty-state {
+            padding: 40px;
+            text-align: center;
+            color: #434651;
+            font-size: 13px;
+        }
+
+        @media (max-width: 1024px) {
+            .chart-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .status-bar {
+            background: #1e222d;
+            border-top: 1px solid #2b2b43;
+            padding: 6px 20px;
+            font-size: 11px;
+            color: #758696;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <span class="toolbar-label">Search Stock</span>
+        <div class="search-container">
+            <input type="text" id="stock-input" placeholder="Search: AAPL, BBCA.JK, TSLA..." value="BBCA.JK">
+            <div id="autocomplete-dropdown" class="autocomplete-dropdown"></div>
+        </div>
+        <button id="load-btn">LOAD</button>
+        <button id="add-panel-btn" class="btn-secondary">+ PANEL</button>
+
+        <div style="flex: 1"></div>
+
+        <div class="quick-stocks" id="quick-stocks"></div>
+    </div>
+
+    <div id="chart-grid" class="chart-grid"></div>
+
+    <div class="status-bar" id="status-bar">Ready</div>
+
+    <script>
+        // Global Stock Database
+        const STOCK_DATABASE = [
+            // US - Tech
+            { symbol: 'AAPL', name: 'Apple Inc', exchange: 'NASDAQ' },
+            { symbol: 'MSFT', name: 'Microsoft', exchange: 'NASDAQ' },
+            { symbol: 'GOOGL', name: 'Alphabet Class A', exchange: 'NASDAQ' },
+            { symbol: 'AMZN', name: 'Amazon.com', exchange: 'NASDAQ' },
+            { symbol: 'NVDA', name: 'NVIDIA', exchange: 'NASDAQ' },
+            { symbol: 'META', name: 'Meta Platforms', exchange: 'NASDAQ' },
+            { symbol: 'TSLA', name: 'Tesla', exchange: 'NASDAQ' },
+            { symbol: 'NFLX', name: 'Netflix', exchange: 'NASDAQ' },
+            { symbol: 'AMD', name: 'Advanced Micro Devices', exchange: 'NASDAQ' },
+            { symbol: 'INTC', name: 'Intel', exchange: 'NASDAQ' },
+            // US - Finance
+            { symbol: 'JPM', name: 'JPMorgan Chase', exchange: 'NYSE' },
+            { symbol: 'BAC', name: 'Bank of America', exchange: 'NYSE' },
+            { symbol: 'WFC', name: 'Wells Fargo', exchange: 'NYSE' },
+            { symbol: 'V', name: 'Visa', exchange: 'NYSE' },
+            { symbol: 'MA', name: 'Mastercard', exchange: 'NYSE' },
+            // US - Consumer
+            { symbol: 'WMT', name: 'Walmart', exchange: 'NYSE' },
+            { symbol: 'HD', name: 'Home Depot', exchange: 'NYSE' },
+            { symbol: 'MCD', name: 'McDonalds', exchange: 'NYSE' },
+            { symbol: 'NKE', name: 'Nike', exchange: 'NYSE' },
+            { symbol: 'KO', name: 'Coca-Cola', exchange: 'NYSE' },
+            // Indonesia - Banking
+            { symbol: 'BBCA.JK', name: 'Bank Central Asia', exchange: 'IDX' },
+            { symbol: 'BMRI.JK', name: 'Bank Mandiri', exchange: 'IDX' },
+            { symbol: 'BBRI.JK', name: 'Bank Rakyat Indonesia', exchange: 'IDX' },
+            { symbol: 'BBNI.JK', name: 'Bank Negara Indonesia', exchange: 'IDX' },
+            // Indonesia - Telecom & Tech
+            { symbol: 'TLKM.JK', name: 'Telkom Indonesia', exchange: 'IDX' },
+            { symbol: 'EXCL.JK', name: 'XL Axiata', exchange: 'IDX' },
+            { symbol: 'GOTO.JK', name: 'GoTo Gojek Tokopedia', exchange: 'IDX' },
+            // Indonesia - Consumer
+            { symbol: 'UNVR.JK', name: 'Unilever Indonesia', exchange: 'IDX' },
+            { symbol: 'INDF.JK', name: 'Indofood Sukses Makmur', exchange: 'IDX' },
+            { symbol: 'ICBP.JK', name: 'Indofood CBP', exchange: 'IDX' },
+            // Indonesia - Automotive & Energy
+            { symbol: 'ASII.JK', name: 'Astra International', exchange: 'IDX' },
+            { symbol: 'UNTR.JK', name: 'United Tractors', exchange: 'IDX' },
+            { symbol: 'ANTM.JK', name: 'Aneka Tambang', exchange: 'IDX' },
+            { symbol: 'PTBA.JK', name: 'Bukit Asam', exchange: 'IDX' },
+            // UK
+            { symbol: 'BP.L', name: 'BP', exchange: 'LSE' },
+            { symbol: 'SHEL.L', name: 'Shell', exchange: 'LSE' },
+            { symbol: 'HSBA.L', name: 'HSBC Holdings', exchange: 'LSE' },
+            // China/HK
+            { symbol: 'BABA', name: 'Alibaba Group', exchange: 'NYSE' },
+            { symbol: '0700.HK', name: 'Tencent Holdings', exchange: 'HKEX' },
+            // Japan
+            { symbol: '7203.T', name: 'Toyota Motor', exchange: 'TSE' },
+            { symbol: '6758.T', name: 'Sony Group', exchange: 'TSE' }
+        ];
+
+        // Configuration - Bar intervals with max history
+        const TIMEFRAME_CONFIG = {
+            '1m': { interval: '1m', range: '1d', label: '1m', aggregate: null },
+            '5m': { interval: '5m', range: '5d', label: '5m', aggregate: null },
+            '15m': { interval: '15m', range: '1mo', label: '15m', aggregate: null },
+            '30m': { interval: '30m', range: '1mo', label: '30m', aggregate: null },
+            '1h': { interval: '1h', range: '2y', label: '1h', aggregate: null },
+            '4h': { interval: '1h', range: 'max', label: '4h', aggregate: null },
+            '1D': { interval: '1d', range: 'max', label: '1D', aggregate: null },
+            '1W': { interval: '1wk', range: 'max', label: '1W', aggregate: null },
+            '1M': { interval: '1mo', range: 'max', label: '1M', aggregate: null },
+            '12M': { interval: '1mo', range: 'max', label: '12M', aggregate: 12 },   // Aggregate 12 months into 1 bar
+            '24M': { interval: '1mo', range: 'max', label: '24M', aggregate: 24 },   // Aggregate 24 months into 1 bar
+            '36M': { interval: '1mo', range: 'max', label: '36M', aggregate: 36 }    // Aggregate 36 months into 1 bar
+        };
+
+        const QUICK_STOCKS = ['BBCA.JK', 'TLKM.JK', 'ASII.JK', 'BMRI.JK', 'BBRI.JK', 'GOTO.JK'];
+
+        const appState = {
+            symbol: 'BBCA.JK',
+            panels: [],
+            nextPanelId: 1,
+            isLoading: false
+        };
+
+        // API Functions using local Flask backend
+        async function fetchStockData(symbol, interval, period) {
+            const url = `http://localhost:5001/api/stock/${symbol}?interval=${interval}&period=${period}`;
+
+            try {
+                console.log('Fetching from local backend:', url);
+
+                const response = await fetch(url);
+
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (data.error) {
+                    throw new Error(data.message || 'Failed to fetch data');
+                }
+
+                if (!data.success || !data.data || data.data.length === 0) {
+                    throw new Error('No data available for this symbol/timeframe');
+                }
+
+                console.log(`Success: Loaded ${data.count} bars for ${symbol}`);
+                return data.data;
+
+            } catch (error) {
+                console.error('Fetch error:', error);
+                if (error.message.includes('Failed to fetch')) {
+                    throw new Error('Backend server not running. Please start: python3 server.py');
+                }
+                throw error;
+            }
+        }
+
+        // Aggregate bars (e.g., combine 12 monthly bars into 1 yearly bar)
+        function aggregateBars(data, groupSize) {
+            if (!groupSize || groupSize === 1) return data;
+
+            const aggregated = [];
+            for (let i = 0; i < data.length; i += groupSize) {
+                const group = data.slice(i, i + groupSize);
+                if (group.length === 0) continue;
+
+                const bar = {
+                    time: group[0].time,  // Use first bar's timestamp
+                    open: group[0].open,  // First bar's open
+                    high: Math.max(...group.map(b => b.high)),  // Highest high
+                    low: Math.min(...group.map(b => b.low)),    // Lowest low
+                    close: group[group.length - 1].close        // Last bar's close
+                };
+
+                aggregated.push(bar);
+            }
+
+            return aggregated;
+        }
+
+        // Chart Management (TradingView style)
+        function createChart(container, data) {
+            const chart = LightweightCharts.createChart(container, {
+                width: container.clientWidth,
+                height: 450,
+                layout: {
+                    background: { color: '#131722' },
+                    textColor: '#d1d4dc',
+                },
+                grid: {
+                    vertLines: { color: '#1e222d' },
+                    horzLines: { color: '#1e222d' },
+                },
+                crosshair: {
+                    mode: LightweightCharts.CrosshairMode.Normal,
+                    vertLine: {
+                        color: '#758696',
+                        width: 1,
+                        style: 3,
+                        labelBackgroundColor: '#2962ff'
+                    },
+                    horzLine: {
+                        color: '#758696',
+                        width: 1,
+                        style: 3,
+                        labelBackgroundColor: '#2962ff'
+                    }
+                },
+                timeScale: {
+                    timeVisible: true,
+                    borderColor: '#2b2b43',
+                    barSpacing: 10,
+                },
+                rightPriceScale: {
+                    borderColor: '#2b2b43',
+                    scaleMargins: {
+                        top: 0.1,
+                        bottom: 0.1,
+                    }
+                },
+            });
+
+            const candlestickSeries = chart.addCandlestickSeries({
+                upColor: '#089981',
+                downColor: '#f23645',
+                borderVisible: false,
+                wickUpColor: '#089981',
+                wickDownColor: '#f23645',
+            });
+
+            candlestickSeries.setData(data);
+            chart.timeScale().fitContent();
+
+            return { chart, series: candlestickSeries };
+        }
+
+        // Panel Management
+        function addPanel(timeframe = '15m') {
+            const panelId = appState.nextPanelId++;
+            const panel = {
+                id: panelId,
+                timeframe: timeframe,
+                chart: null,
+                series: null,
+                container: null
+            };
+
+            appState.panels.push(panel);
+            renderPanel(panel);
+
+            if (appState.symbol) {
+                loadPanelData(panel);
+            }
+        }
+
+        function renderPanel(panel) {
+            const grid = document.getElementById('chart-grid');
+            const panelElement = document.createElement('div');
+            panelElement.id = `panel-${panel.id}`;
+            panelElement.className = 'chart-panel';
+
+            const header = document.createElement('div');
+            header.className = 'panel-header';
+
+            const select = document.createElement('select');
+            select.id = `timeframe-${panel.id}`;
+            Object.keys(TIMEFRAME_CONFIG).forEach(tf => {
+                const option = document.createElement('option');
+                option.value = tf;
+                option.textContent = TIMEFRAME_CONFIG[tf].label;
+                option.selected = tf === panel.timeframe;
+                select.appendChild(option);
+            });
+            select.addEventListener('change', () => onTimeframeChange(panel.id));
+
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'btn-remove';
+            removeBtn.textContent = '✕';
+            removeBtn.addEventListener('click', () => removePanel(panel.id));
+
+            header.appendChild(select);
+            header.appendChild(removeBtn);
+
+            const chartContainer = document.createElement('div');
+            chartContainer.id = `chart-${panel.id}`;
+            chartContainer.className = 'chart-container';
+
+            const emptyState = document.createElement('div');
+            emptyState.className = 'empty-state';
+            emptyState.textContent = 'Enter symbol and click LOAD';
+            chartContainer.appendChild(emptyState);
+
+            panelElement.appendChild(header);
+            panelElement.appendChild(chartContainer);
+            grid.appendChild(panelElement);
+
+            panel.container = chartContainer;
+        }
+
+        function removePanel(panelId) {
+            if (appState.panels.length <= 1) {
+                alert('Cannot remove last panel');
+                return;
+            }
+
+            const panel = appState.panels.find(p => p.id === panelId);
+            if (panel && panel.chart) {
+                panel.chart.remove();
+            }
+
+            appState.panels = appState.panels.filter(p => p.id !== panelId);
+            document.getElementById(`panel-${panelId}`).remove();
+        }
+
+        function onTimeframeChange(panelId) {
+            const panel = appState.panels.find(p => p.id === panelId);
+            if (!panel) return;
+
+            const select = document.getElementById(`timeframe-${panelId}`);
+            panel.timeframe = select.value;
+
+            if (appState.symbol) {
+                loadPanelData(panel);
+            }
+        }
+
+        async function loadPanelData(panel) {
+            const container = panel.container;
+            container.textContent = '';
+
+            const overlay = document.createElement('div');
+            overlay.className = 'loading-overlay';
+            const spinner = document.createElement('div');
+            spinner.className = 'spinner';
+            const text = document.createElement('div');
+            text.className = 'loading-text';
+            text.textContent = `Loading ${panel.timeframe}...`;
+            overlay.appendChild(spinner);
+            overlay.appendChild(text);
+            container.appendChild(overlay);
+
+            try {
+                const config = TIMEFRAME_CONFIG[panel.timeframe];
+                let data = await fetchStockData(appState.symbol, config.interval, config.range);
+
+                // Aggregate bars if needed (e.g., 12M, 24M, 36M)
+                if (config.aggregate) {
+                    data = aggregateBars(data, config.aggregate);
+                }
+
+                container.textContent = '';
+
+                if (panel.chart) {
+                    panel.chart.remove();
+                }
+
+                const { chart, series } = createChart(container, data);
+                panel.chart = chart;
+                panel.series = series;
+
+                updateStatus(`Loaded ${appState.symbol} - ${data.length} bars`);
+            } catch (error) {
+                console.error('Panel load error:', error);
+                container.textContent = '';
+
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'error-message';
+                errorDiv.textContent = error.message;
+
+                const retryBtn = document.createElement('button');
+                retryBtn.textContent = 'RETRY';
+                retryBtn.onclick = () => loadPanelData(panel);
+                errorDiv.appendChild(document.createElement('br'));
+                errorDiv.appendChild(retryBtn);
+
+                container.appendChild(errorDiv);
+                updateStatus('Error: ' + error.message);
+            }
+        }
+
+        // Autocomplete search functionality
+        function searchStocks(query) {
+            if (!query || query.length < 1) return [];
+
+            query = query.toUpperCase();
+            return STOCK_DATABASE.filter(stock =>
+                stock.symbol.toUpperCase().includes(query) ||
+                stock.name.toUpperCase().includes(query)
+            ).slice(0, 10); // Limit to 10 results
+        }
+
+        function showAutocomplete(results) {
+            const dropdown = document.getElementById('autocomplete-dropdown');
+            dropdown.textContent = '';
+
+            if (results.length === 0) {
+                dropdown.classList.remove('show');
+                return;
+            }
+
+            results.forEach(stock => {
+                const item = document.createElement('div');
+                item.className = 'autocomplete-item';
+
+                const symbolSpan = document.createElement('span');
+                symbolSpan.className = 'symbol';
+                symbolSpan.textContent = stock.symbol;
+
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'name';
+                nameSpan.textContent = stock.name;
+
+                const exchangeSpan = document.createElement('span');
+                exchangeSpan.className = 'exchange';
+                exchangeSpan.textContent = stock.exchange;
+
+                item.appendChild(symbolSpan);
+                item.appendChild(nameSpan);
+                item.appendChild(exchangeSpan);
+
+                item.addEventListener('click', () => {
+                    document.getElementById('stock-input').value = stock.symbol;
+                    dropdown.classList.remove('show');
+                    loadAllCharts();
+                });
+
+                dropdown.appendChild(item);
+            });
+
+            dropdown.classList.add('show');
+        }
+
+        async function loadAllCharts() {
+            const input = document.getElementById('stock-input');
+            let symbol = input.value.trim().toUpperCase();
+
+            if (!symbol) {
+                alert('Enter a stock symbol');
+                return;
+            }
+
+            // Hide autocomplete
+            document.getElementById('autocomplete-dropdown').classList.remove('show');
+
+            appState.symbol = symbol;
+            appState.isLoading = true;
+
+            const loadBtn = document.getElementById('load-btn');
+            loadBtn.disabled = true;
+            loadBtn.textContent = 'LOADING...';
+
+            updateStatus(`Loading ${symbol}...`);
+
+            for (const panel of appState.panels) {
+                await loadPanelData(panel);
+                await new Promise(r => setTimeout(r, 500));
+            }
+
+            appState.isLoading = false;
+            loadBtn.disabled = false;
+            loadBtn.textContent = 'LOAD';
+        }
+
+        function loadQuickStock(symbol) {
+            document.getElementById('stock-input').value = symbol;
+            document.getElementById('autocomplete-dropdown').classList.remove('show');
+            loadAllCharts();
+        }
+
+        function updateStatus(message) {
+            document.getElementById('status-bar').textContent = message;
+        }
+
+        // Event Listeners
+        function initEventListeners() {
+            const stockInput = document.getElementById('stock-input');
+
+            // Autocomplete on input
+            stockInput.addEventListener('input', (e) => {
+                const query = e.target.value;
+                const results = searchStocks(query);
+                showAutocomplete(results);
+            });
+
+            // Close autocomplete on click outside
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.search-container')) {
+                    document.getElementById('autocomplete-dropdown').classList.remove('show');
+                }
+            });
+
+            // Load on Enter key
+            stockInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') loadAllCharts();
+            });
+
+            document.getElementById('load-btn').addEventListener('click', loadAllCharts);
+            document.getElementById('add-panel-btn').addEventListener('click', () => addPanel());
+
+            let resizeTimeout;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(() => {
+                    appState.panels.forEach(panel => {
+                        if (panel.chart && panel.container) {
+                            panel.chart.applyOptions({
+                                width: panel.container.clientWidth,
+                                height: 450
+                            });
+                        }
+                    });
+                }, 300);
+            });
+        }
+
+        function initQuickStocks() {
+            const container = document.getElementById('quick-stocks');
+            // Show mix of popular stocks from different exchanges
+            const popularStocks = ['AAPL', 'TSLA', 'BBCA.JK', 'GOTO.JK', 'NVDA', '0700.HK'];
+
+            popularStocks.forEach(symbol => {
+                const stock = STOCK_DATABASE.find(s => s.symbol === symbol);
+                const btn = document.createElement('button');
+                btn.className = 'quick-stock-btn';
+                btn.textContent = stock ? stock.symbol : symbol;
+                btn.addEventListener('click', () => loadQuickStock(symbol));
+                container.appendChild(btn);
+            });
+        }
+
+        // Initialize
+        function initializeApp() {
+            initQuickStocks();
+            addPanel('15m');
+            addPanel('1D');
+            initEventListeners();
+            setTimeout(() => loadAllCharts(), 500);
+        }
+
+        window.addEventListener('DOMContentLoaded', initializeApp);
+    </script>
+</body>
+</html>

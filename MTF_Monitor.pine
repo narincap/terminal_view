@@ -1,0 +1,145 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+//@version=5
+indicator("MTF Monitor", overlay=false)
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TIMEFRAME CONFIGURATION
+// ══════════════════════════════════════════════════════════════════════════════
+
+timeframe_preset = input.timeframe("15", "Timeframe Preset",
+                   options=["1", "3", "5", "15", "30", "60", "120", "240", "360", "720", "D", "3D", "W", "M"],
+                   tooltip="Select a common timeframe from the dropdown")
+
+timeframe_manual = input.string("", "Manual Timeframe Override",
+                   tooltip="Enter custom timeframe (e.g., '45', '2H', '7D'). Leave empty to use preset above.")
+
+// Determine which timeframe to use
+effective_timeframe = timeframe_manual != "" ? timeframe_manual : timeframe_preset
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CHART STYLE SETTINGS
+// ══════════════════════════════════════════════════════════════════════════════
+
+chart_type = input.string("Candlesticks", "Chart Type",
+            options=["Candlesticks", "OHLC Bars"],
+            tooltip="Choose between candlestick or OHLC bar display")
+
+bullish_color = input.color(color.new(#26a69a, 0), "Bullish Color",
+                group="Colors")
+
+bearish_color = input.color(color.new(#ef5350, 0), "Bearish Color",
+                group="Colors")
+
+use_custom_borders = input.bool(false, "Use Custom Border Color",
+                     group="Colors")
+
+border_color = input.color(color.new(#378658, 0), "Border Color",
+               group="Colors",
+               tooltip="Applied when 'Use Custom Border Color' is enabled")
+
+use_custom_wicks = input.bool(false, "Use Custom Wick Color",
+                   group="Colors")
+
+wick_color = input.color(color.new(#378658, 0), "Wick Color",
+             group="Colors",
+             tooltip="Applied when 'Use Custom Wick Color' is enabled")
+
+// ══════════════════════════════════════════════════════════════════════════════
+// OPTIONAL FEATURES
+// ══════════════════════════════════════════════════════════════════════════════
+
+show_volume = input.bool(true, "Show Volume",
+              group="Optional Features")
+
+volume_color_up = input.color(color.new(#26a69a, 70), "Volume Up Color",
+                  group="Optional Features")
+
+volume_color_down = input.color(color.new(#ef5350, 70), "Volume Down Color",
+                    group="Optional Features")
+
+show_timeframe_label = input.bool(true, "Show Timeframe Label",
+                       group="Optional Features",
+                       tooltip="Display timeframe text on panel")
+
+// ══════════════════════════════════════════════════════════════════════════════
+// DATA OPTIONS
+// ══════════════════════════════════════════════════════════════════════════════
+
+data_mode = input.string("Confirmed bars only (no repaint)", "Data Mode",
+            options=["Confirmed bars only (no repaint)", "Include current bar (live)"],
+            group="Data Options",
+            tooltip="'Confirmed bars only' prevents repainting. 'Live' shows unconfirmed current bar.")
+
+lookahead_setting = data_mode == "Confirmed bars only (no repaint)" ?
+                    barmerge.lookahead_off : barmerge.lookahead_on
+
+// ══════════════════════════════════════════════════════════════════════════════
+// DATA RETRIEVAL
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Fetch OHLCV data from the selected timeframe
+[mtf_open, mtf_high, mtf_low, mtf_close, mtf_volume] =
+    request.security(syminfo.tickerid, effective_timeframe,
+                     [open, high, low, close, volume],
+                     lookahead=lookahead_setting)
+
+// Check if selected timeframe is valid (not lower than chart timeframe)
+is_valid_timeframe = timeframe.in_seconds(effective_timeframe) >= timeframe.in_seconds(timeframe.period)
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PLOTTING
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Determine colors for candles/bars
+body_color = mtf_close >= mtf_open ? bullish_color : bearish_color
+final_border_color = use_custom_borders ? border_color : body_color
+final_wick_color = use_custom_wicks ? wick_color : body_color
+
+// Plot based on chart type selection
+if chart_type == "Candlesticks" and is_valid_timeframe
+    plotcandle(mtf_open, mtf_high, mtf_low, mtf_close,
+               title="MTF Candles",
+               color=body_color,
+               wickcolor=final_wick_color,
+               bordercolor=final_border_color)
+else if chart_type == "OHLC Bars" and is_valid_timeframe
+    plotbar(mtf_open, mtf_high, mtf_low, mtf_close,
+            title="MTF Bars",
+            color=body_color)
+
+// Plot volume if enabled
+volume_color = mtf_close >= mtf_open ? volume_color_up : volume_color_down
+plot(show_volume and is_valid_timeframe ? mtf_volume : na,
+     title="Volume",
+     style=plot.style_columns,
+     color=volume_color)
+
+// ══════════════════════════════════════════════════════════════════════════════
+// LABELS & WARNINGS
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Display timeframe label
+if show_timeframe_label and barstate.islast and is_valid_timeframe
+    label.new(bar_index, mtf_high,
+              text=effective_timeframe,
+              style=label.style_label_down,
+              color=color.new(color.gray, 80),
+              textcolor=color.white,
+              size=size.small)
+
+// Display warning if invalid timeframe selected
+if not is_valid_timeframe and barstate.islast
+    label.new(bar_index, 0,
+              text="⚠ Select timeframe >= chart timeframe\nCurrent: " + timeframe.period + " | Selected: " + effective_timeframe,
+              style=label.style_label_center,
+              color=color.new(color.red, 0),
+              textcolor=color.white,
+              size=size.normal,
+              tooltip="Pine Script cannot reliably fetch lower timeframe data")
+
+// ══════════════════════════════════════════════════════════════════════════════
+// BACKGROUND (Optional - helps distinguish panels)
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Uncomment below to add subtle background color
+// bgcolor(color.new(color.gray, 98), title="Panel Background")
