@@ -642,7 +642,7 @@
                 stock.name.toUpperCase().includes(query) ||
                 (stock.sector && stock.sector.toUpperCase().includes(query)) ||
                 (stock.industry && stock.industry.toUpperCase().includes(query))
-            ).slice(0, 10);
+            ).slice(0, 30);
         }
 
         async function showAutocomplete(results) {
