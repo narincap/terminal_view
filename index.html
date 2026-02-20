@@ -645,15 +645,63 @@
         }
 
         // Autocomplete search functionality
+        // Smart autocomplete search with relevance ranking
         function searchStocks(query) {
             if (!query || query.length < 1) return [];
-            query = query.toUpperCase();
-            return STOCK_DATABASE.filter(stock =>
-                stock.symbol.toUpperCase().includes(query) ||
-                stock.name.toUpperCase().includes(query) ||
-                (stock.sector && stock.sector.toUpperCase().includes(query)) ||
-                (stock.industry && stock.industry.toUpperCase().includes(query))
-            ).slice(0, 30);
+            
+            const queryUpper = query.toUpperCase();
+            
+            // Filter and score each stock by relevance
+            const scoredResults = STOCK_DATABASE
+                .map(stock => {
+                    const symbol = stock.symbol.toUpperCase();
+                    const name = stock.name.toUpperCase();
+                    const sector = (stock.sector || '').toUpperCase();
+                    const industry = (stock.industry || '').toUpperCase();
+                    
+                    let score = 0;
+                    
+                    // Highest priority: Symbol starts with query
+                    if (symbol.startsWith(queryUpper)) {
+                        score = 1000;
+                    }
+                    // High priority: Symbol contains query
+                    else if (symbol.includes(queryUpper)) {
+                        score = 500;
+                    }
+                    // Medium priority: Name starts with query
+                    else if (name.startsWith(queryUpper)) {
+                        score = 100;
+                    }
+                    // Lower priority: Name contains query
+                    else if (name.includes(queryUpper)) {
+                        score = 50;
+                    }
+                    // Lowest priority: Sector or industry matches
+                    else if (sector.includes(queryUpper) || industry.includes(queryUpper)) {
+                        score = 10;
+                    }
+                    
+                    // Boost exact matches
+                    if (symbol === queryUpper || symbol === queryUpper + '.JK') {
+                        score = 10000;
+                    }
+                    
+                    return { stock, score };
+                })
+                .filter(item => item.score > 0)
+                .sort((a, b) => {
+                    // Sort by score (highest first)
+                    if (b.score !== a.score) {
+                        return b.score - a.score;
+                    }
+                    // If same score, sort alphabetically by symbol
+                    return a.stock.symbol.localeCompare(b.stock.symbol);
+                })
+                .slice(0, 30)
+                .map(item => item.stock);
+            
+            return scoredResults;
         }
 
         async function showAutocomplete(results) {
