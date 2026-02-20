@@ -291,20 +291,31 @@
             try {
                 console.log('Fetching stock list from backend...');
                 const response = await fetch('/api/stocks/list');
+                
+                if (!response.ok) {
+                    throw new Error('API returned ' + response.status + ': ' + response.statusText);
+                }
+                
                 const data = await response.json();
+                console.log('API response:', {success: data.success, count: data.count});
                 
                 if (data.success && data.stocks) {
                     STOCK_DATABASE = data.stocks;
                     STOCK_DATABASE_LOADED = true;
-                    console.log('Loaded ' + data.count + ' stocks');
+                    console.log('✓ Loaded ' + data.count + ' stocks successfully');
+                    console.log('Sample stocks:', data.stocks.slice(0, 3));
                     updateStatus('Loaded ' + data.count + ' stocks from database');
+                } else {
+                    throw new Error('Invalid API response format');
                 }
             } catch (error) {
-                console.error('Error loading stock list:', error);
+                console.error('❌ Error loading stock list:', error);
+                console.error('Falling back to minimal stock list');
                 STOCK_DATABASE = [
                     { symbol: 'BBCA.JK', name: 'Bank Central Asia', exchange: 'IDX', sector: 'Financial', industry: 'Banks' }
                 ];
                 STOCK_DATABASE_LOADED = true;
+                updateStatus('Error loading stocks - using fallback list');
             }
         }
 
@@ -842,6 +853,12 @@
             setTimeout(() => loadAllCharts(), 500);
         }
 
+        // Debug helper - type debugStocks() in console to check loaded stocks
+        window.debugStocks = function() {
+            console.log("Total stocks loaded:", STOCK_DATABASE.length);
+            console.log("Sample stocks:", STOCK_DATABASE.slice(0, 5));
+            return {count: STOCK_DATABASE.length, stocks: STOCK_DATABASE};
+        };
         window.addEventListener('DOMContentLoaded', initializeApp);
     </script>
 </body>
