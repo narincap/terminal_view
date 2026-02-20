@@ -824,6 +824,7 @@ class handler(BaseHTTPRequestHandler):
                 {"symbol": "YPAS.JK", "name": "PT Yanaprima Hastapersada Tbk", "exchange": "IDX", "sector": "Consumer Cyclical", "industry": "Packaging & Containers"},
                 {"symbol": "WOOD.JK", "name": "PT Integra Indocabinet Tbk", "exchange": "IDX", "sector": "Consumer Cyclical", "industry": "Furnishings, Fixtures & Appliances"},
                 {"symbol": "WPAK.JK", "name": "WPAK", "exchange": "IDX", "sector": "", "industry": ""},
+                {"symbol": "ZATA.JK", "name": "PT Bersama Zatta Jaya Tbk", "exchange": "IDX", "sector": "Consumer Cyclical", "industry": "Apparel Retail"},
                 {"symbol": "AAPL", "name": "Apple Inc", "exchange": "NASDAQ", "sector": "Technology", "industry": "Consumer Electronics"},
                 {"symbol": "MSFT", "name": "Microsoft", "exchange": "NASDAQ", "sector": "Technology", "industry": "Software"},
                 {"symbol": "GOOGL", "name": "Alphabet Class A", "exchange": "NASDAQ", "sector": "Communication", "industry": "Internet"},
