@@ -258,7 +258,18 @@
             padding: 6px 20px;
             font-size: 11px;
             color: #758696;
-            text-align: center;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .db-status {
+            color: #2962ff;
+            font-weight: 600;
+        }
+
+        .db-status.error {
+            color: #f23645;
         }
     </style>
 </head>
@@ -279,7 +290,10 @@
 
     <div id="chart-grid" class="chart-grid"></div>
 
-    <div class="status-bar" id="status-bar">Ready</div>
+    <div class="status-bar">
+        <span id="status-bar">Ready</span>
+        <span id="db-status" class="db-status">Loading database...</span>
+    </div>
 
     <script>
         // Global Stock Database - loaded dynamically from API
@@ -287,35 +301,53 @@
         let STOCK_DATABASE_LOADED = false;
         const PRICE_CACHE = new Map();
 
+        function updateDatabaseStatus(message, isError = false) {
+            const dbStatus = document.getElementById('db-status');
+            if (dbStatus) {
+                dbStatus.textContent = message;
+                if (isError) {
+                    dbStatus.classList.add('error');
+                } else {
+                    dbStatus.classList.remove('error');
+                }
+            }
+        }
+
         async function fetchStockList() {
             try {
-                console.log('Fetching stock list from backend...');
+                console.log('🔄 Fetching stock list from backend...');
+                updateDatabaseStatus('Loading database...');
+
                 const response = await fetch('/api/stocks/list');
-                
+
                 if (!response.ok) {
                     throw new Error('API returned ' + response.status + ': ' + response.statusText);
                 }
-                
+
                 const data = await response.json();
-                console.log('API response:', {success: data.success, count: data.count});
-                
-                if (data.success && data.stocks) {
+                console.log('📊 API response:', {success: data.success, count: data.count});
+
+                if (data.success && data.stocks && data.stocks.length > 0) {
                     STOCK_DATABASE = data.stocks;
                     STOCK_DATABASE_LOADED = true;
-                    console.log('✓ Loaded ' + data.count + ' stocks successfully');
-                    console.log('Sample stocks:', data.stocks.slice(0, 3));
+                    console.log('✅ Loaded ' + data.count + ' stocks successfully');
+                    console.log('📝 Sample stocks:', data.stocks.slice(0, 5));
+                    console.log('🔍 Test search for BNBR:', searchStocks('bnbr').length + ' results');
+                    console.log('🔍 Test search for WIFI:', searchStocks('wifi').length + ' results');
                     updateStatus('Loaded ' + data.count + ' stocks from database');
+                    updateDatabaseStatus('✓ ' + data.count + ' stocks loaded');
                 } else {
-                    throw new Error('Invalid API response format');
+                    throw new Error('Invalid API response: ' + (data.stocks ? 'empty stocks array' : 'no stocks property'));
                 }
             } catch (error) {
                 console.error('❌ Error loading stock list:', error);
-                console.error('Falling back to minimal stock list');
+                console.error('⚠️ Falling back to minimal stock list');
                 STOCK_DATABASE = [
                     { symbol: 'BBCA.JK', name: 'Bank Central Asia', exchange: 'IDX', sector: 'Financial', industry: 'Banks' }
                 ];
                 STOCK_DATABASE_LOADED = true;
                 updateStatus('Error loading stocks - using fallback list');
+                updateDatabaseStatus('⚠️ Database error - only 1 stock available', true);
             }
         }
 
@@ -648,9 +680,15 @@
         // Smart autocomplete search with relevance ranking
         function searchStocks(query) {
             if (!query || query.length < 1) return [];
-            
+
             const queryUpper = query.toUpperCase();
-            
+
+            // Debug: Log database size
+            if (STOCK_DATABASE.length === 0) {
+                console.warn('⚠️ Search attempted but STOCK_DATABASE is empty!');
+                return [];
+            }
+
             // Filter and score each stock by relevance
             const scoredResults = STOCK_DATABASE
                 .map(stock => {
@@ -658,9 +696,9 @@
                     const name = stock.name.toUpperCase();
                     const sector = (stock.sector || '').toUpperCase();
                     const industry = (stock.industry || '').toUpperCase();
-                    
+
                     let score = 0;
-                    
+
                     // Highest priority: Symbol starts with query
                     if (symbol.startsWith(queryUpper)) {
                         score = 1000;
@@ -681,12 +719,12 @@
                     else if (sector.includes(queryUpper) || industry.includes(queryUpper)) {
                         score = 10;
                     }
-                    
+
                     // Boost exact matches
                     if (symbol === queryUpper || symbol === queryUpper + '.JK') {
                         score = 10000;
                     }
-                    
+
                     return { stock, score };
                 })
                 .filter(item => item.score > 0)
@@ -700,7 +738,15 @@
                 })
                 .slice(0, 30)
                 .map(item => item.stock);
-            
+
+            // Debug logging for troubleshooting
+            if (query.length >= 3) {
+                console.log('🔍 Search "' + query + '" → ' + scoredResults.length + ' results (from ' + STOCK_DATABASE.length + ' stocks)');
+                if (scoredResults.length > 0 && scoredResults.length <= 5) {
+                    console.log('  Results:', scoredResults.map(s => s.symbol).join(', '));
+                }
+            }
+
             return scoredResults;
         }
 
@@ -709,9 +755,12 @@
             dropdown.textContent = '';
 
             if (results.length === 0) {
+                console.log('💭 No autocomplete results to show');
                 dropdown.classList.remove('show');
                 return;
             }
+
+            console.log('📋 Showing ' + results.length + ' autocomplete results');
 
             // Fetch prices for these results in background
             const symbols = results.map(s => s.symbol);
@@ -901,11 +950,30 @@
             setTimeout(() => loadAllCharts(), 500);
         }
 
-        // Debug helper - type debugStocks() in console to check loaded stocks
-        window.debugStocks = function() {
-            console.log("Total stocks loaded:", STOCK_DATABASE.length);
-            console.log("Sample stocks:", STOCK_DATABASE.slice(0, 5));
-            return {count: STOCK_DATABASE.length, stocks: STOCK_DATABASE};
+        // Debug helpers - use in browser console
+        window.debugStocks = function(query) {
+            if (query) {
+                const results = searchStocks(query);
+                console.log('🔍 Search "' + query + '" found ' + results.length + ' results:');
+                results.forEach((stock, i) => {
+                    console.log('  ' + (i+1) + '. ' + stock.symbol + ' - ' + stock.name);
+                });
+                return results;
+            } else {
+                console.log("📊 Total stocks loaded:", STOCK_DATABASE.length);
+                console.log("📝 Sample stocks:", STOCK_DATABASE.slice(0, 10));
+                console.log("\n💡 Usage: debugStocks('bnbr') to test search");
+                return {count: STOCK_DATABASE.length, stocks: STOCK_DATABASE};
+            }
+        };
+
+        window.testAutocomplete = function(query) {
+            console.log('🧪 Testing autocomplete for: "' + query + '"');
+            const input = document.getElementById('stock-input');
+            input.value = query;
+            const results = searchStocks(query);
+            showAutocomplete(results);
+            console.log('✓ Autocomplete triggered with ' + results.length + ' results');
         };
         window.addEventListener('DOMContentLoaded', initializeApp);
     </script>
