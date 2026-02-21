@@ -63,7 +63,8 @@ class handler(BaseHTTPRequestHandler):
 
             response = {
                 'success': True,
-                'prices': prices
+                'prices': prices,
+                'test_deployment': 'v2_feb21_15_30'
             }
 
             self.send_response(200)
