@@ -64,14 +64,37 @@
             background: #1e222d;
             border: 1px solid #2b2b43;
             border-top: none;
-            max-height: 300px;
+            max-height: 400px;
             overflow-y: auto;
-            z-index: 1000;
+            z-index: 10000;
             display: none;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
         }
 
         .autocomplete-dropdown.show {
             display: block;
+        }
+
+        .autocomplete-no-results {
+            padding: 20px 12px;
+            text-align: center;
+            color: #758696;
+            font-size: 12px;
+        }
+
+        .autocomplete-no-results .try-anyway {
+            margin-top: 10px;
+            padding: 6px 12px;
+            background: #2962ff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 11px;
+            border-radius: 2px;
+        }
+
+        .autocomplete-no-results .try-anyway:hover {
+            background: #1e53e5;
         }
 
         .autocomplete-item {
@@ -750,13 +773,39 @@
             return scoredResults;
         }
 
-        async function showAutocomplete(results) {
+        async function showAutocomplete(results, query) {
             const dropdown = document.getElementById('autocomplete-dropdown');
             dropdown.textContent = '';
 
-            if (results.length === 0) {
-                console.log('💭 No autocomplete results to show');
+            // Always show dropdown when there's input
+            const inputValue = document.getElementById('stock-input').value.trim();
+            if (!inputValue) {
                 dropdown.classList.remove('show');
+                return;
+            }
+
+            if (results.length === 0) {
+                console.log('💭 No autocomplete results for "' + inputValue + '"');
+
+                // Show "no results" message with "try anyway" option
+                const noResults = document.createElement('div');
+                noResults.className = 'autocomplete-no-results';
+
+                const message = document.createElement('div');
+                message.textContent = 'No matches found for "' + inputValue + '"';
+                noResults.appendChild(message);
+
+                const tryButton = document.createElement('button');
+                tryButton.className = 'try-anyway';
+                tryButton.textContent = 'TRY ' + inputValue.toUpperCase() + ' ANYWAY';
+                tryButton.addEventListener('click', () => {
+                    dropdown.classList.remove('show');
+                    loadAllCharts();
+                });
+                noResults.appendChild(tryButton);
+
+                dropdown.appendChild(noResults);
+                dropdown.classList.add('show');
                 return;
             }
 
@@ -886,11 +935,27 @@
         function initEventListeners() {
             const stockInput = document.getElementById('stock-input');
 
-            // Autocomplete on input
+            // Autocomplete on input - trigger immediately on any character
             stockInput.addEventListener('input', (e) => {
-                const query = e.target.value;
+                const query = e.target.value.trim();
+                console.log('⌨️ Input changed: "' + query + '"');
+
+                if (!query) {
+                    document.getElementById('autocomplete-dropdown').classList.remove('show');
+                    return;
+                }
+
                 const results = searchStocks(query);
-                showAutocomplete(results);
+                showAutocomplete(results, query);
+            });
+
+            // Also show autocomplete on focus if there's already text
+            stockInput.addEventListener('focus', (e) => {
+                const query = e.target.value.trim();
+                if (query) {
+                    const results = searchStocks(query);
+                    showAutocomplete(results, query);
+                }
             });
 
             // Close autocomplete on click outside

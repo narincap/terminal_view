@@ -341,6 +341,7 @@ class handler(BaseHTTPRequestHandler):
                 {"symbol": "HRME.JK", "name": "PT Menteng Heritage Realty Tbk", "exchange": "IDX", "sector": "Consumer Cyclical", "industry": "Lodging"},
                 {"symbol": "HOKI.JK", "name": "PT Buyung Poetra Sembada Tbk", "exchange": "IDX", "sector": "Consumer Defensive", "industry": "Packaged Foods"},
                 {"symbol": "HRUM.JK", "name": "PT Harum Energy Tbk", "exchange": "IDX", "sector": "Energy", "industry": "Thermal Coal"},
+                {"symbol": "HUMI.JK", "name": "PT Humpuss Maritim Internasional Tbk", "exchange": "IDX", "sector": "Industrials", "industry": "Marine Shipping"},
                 {"symbol": "IBFN.JK", "name": "PT Intan Baru Prana Tbk", "exchange": "IDX", "sector": "Financial Services", "industry": "Credit Services"},
                 {"symbol": "HUB.JK", "name": "HUB", "exchange": "IDX", "sector": "", "industry": ""},
                 {"symbol": "IBOS.JK", "name": "PT Indo Boga Sukses Tbk", "exchange": "IDX", "sector": "Consumer Cyclical", "industry": "Restaurants"},
