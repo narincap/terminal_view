@@ -1404,6 +1404,156 @@
             });
         }
 
+        // Screener functionality
+        async function loadScreener() {
+            const content = document.getElementById('screener-content');
+
+            content.innerHTML = `
+                <div class="screener-loading" style="text-align: center; padding: 60px 20px;">
+                    <div class="spinner" style="margin: 0 auto 20px; width: 48px; height: 48px; border: 4px solid #2b2b43; border-top-color: #2962ff; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                    <p style="color: #d1d4dc; font-size: 16px; margin: 0;">Analyzing 67,000+ stocks worldwide...</p>
+                    <p style="color: #7f8c98; font-size: 14px; margin-top: 8px;">Finding exponential breakout patterns</p>
+                </div>
+            `;
+
+            try {
+                const response = await fetch('/api/momentum');
+                if (!response.ok) {
+                    throw new Error(`API returned ${response.status}`);
+                }
+                const data = await response.json();
+
+                if (data.success && data.stocks) {
+                    renderScreenerStocks(data.stocks);
+                } else {
+                    throw new Error(data.error || 'No stocks returned');
+                }
+            } catch (error) {
+                console.error('Screener error:', error);
+                content.innerHTML = `
+                    <div style="text-align: center; padding: 60px 20px; color: #ff6b6b;">
+                        <p style="font-size: 18px; margin-bottom: 12px;">⚠️ Error loading screener</p>
+                        <p style="font-size: 14px; color: #7f8c98;">${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        function renderScreenerStocks(stocks) {
+            const content = document.getElementById('screener-content');
+
+            if (!stocks || stocks.length === 0) {
+                content.innerHTML = '<div style="text-align: center; padding: 40px; color: #7f8c98;">No stocks found</div>';
+                return;
+            }
+
+            const grid = document.createElement('div');
+            grid.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px; padding: 20px;';
+
+            stocks.forEach((stock, index) => {
+                const card = createStockCard(stock, index + 1);
+                grid.appendChild(card);
+            });
+
+            content.innerHTML = '';
+            content.appendChild(grid);
+        }
+
+        function createStockCard(stock, rank) {
+            const card = document.createElement('div');
+            card.className = 'stock-card';
+            card.style.cssText = `
+                background: linear-gradient(135deg, #1e222d 0%, #181b24 100%);
+                border: 1px solid #2b2b43;
+                border-radius: 12px;
+                padding: 20px;
+                cursor: pointer;
+                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            `;
+
+            const rankClass = rank === 1 ? 'rank-1' : rank === 2 ? 'rank-2' : rank === 3 ? 'rank-3' : '';
+            const rankColor = rank === 1 ? 'linear-gradient(135deg, #FFD700, #FFA500)' :
+                            rank === 2 ? 'linear-gradient(135deg, #C0C0C0, #A8A8A8)' :
+                            rank === 3 ? 'linear-gradient(135deg, #CD7F32, #8B4513)' : '#2962ff';
+
+            card.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 16px;">
+                    <div>
+                        <div style="font-size: 20px; font-weight: 700; color: #fff; margin-bottom: 4px;">${stock.symbol}</div>
+                        <div style="font-size: 13px; color: #7f8c98;">${stock.name || 'N/A'}</div>
+                    </div>
+                    <div style="font-size: 24px; font-weight: 800; background: ${rankColor}; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">#${rank}</div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+                    <div>
+                        <div style="font-size: 11px; color: #7f8c98; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Pattern Score</div>
+                        <div style="font-size: 18px; font-weight: 700; color: #2962ff;">${stock.pattern_score.toFixed(1)}</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; color: #7f8c98; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Potential Return</div>
+                        <div style="font-size: 18px; font-weight: 700; color: #00c853;">+${stock.potential_return.toFixed(1)}%</div>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 12px;">
+                    <div style="font-size: 11px; color: #7f8c98; margin-bottom: 6px;">Overall Score: ${stock.final_score.toFixed(1)}</div>
+                    <div style="height: 6px; background: #2b2b43; border-radius: 3px; overflow: hidden;">
+                        <div style="height: 100%; background: linear-gradient(90deg, #2962ff, #00c853); width: ${Math.min(100, stock.final_score)}%; transition: width 0.6s ease;"></div>
+                    </div>
+                </div>
+
+                <div style="font-size: 12px; color: #7f8c98; padding-top: 12px; border-top: 1px solid #2b2b43;">
+                    📊 Click to view full chart
+                </div>
+            `;
+
+            card.addEventListener('click', () => {
+                // Switch to charts view
+                switchTab('charts');
+                // Load the stock chart
+                const input = document.getElementById('stock-input');
+                input.value = stock.symbol;
+                selectAutocomplete(stock);
+            });
+
+            card.addEventListener('mouseenter', () => {
+                card.style.transform = 'translateY(-4px)';
+                card.style.boxShadow = '0 12px 24px rgba(41, 98, 255, 0.15)';
+                card.style.borderColor = '#2962ff';
+            });
+
+            card.addEventListener('mouseleave', () => {
+                card.style.transform = 'translateY(0)';
+                card.style.boxShadow = 'none';
+                card.style.borderColor = '#2b2b43';
+            });
+
+            return card;
+        }
+
+        function switchTab(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.tab === tabName) {
+                    btn.classList.add('active');
+                }
+            });
+
+            // Update views
+            document.querySelectorAll('.view-container').forEach(view => {
+                view.style.display = 'none';
+            });
+
+            if (tabName === 'charts') {
+                document.getElementById('charts-view').style.display = 'block';
+            } else if (tabName === 'screener') {
+                document.getElementById('screener-view').style.display = 'block';
+                loadScreener();
+            }
+        }
+
         // Initialize
         async function initializeApp() {
             updateStatus('Loading stock database...');
@@ -1412,6 +1562,18 @@
             addPanel('15m');
             addPanel('1D');
             initEventListeners();
+
+            // Setup tab navigation
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    switchTab(btn.dataset.tab);
+                });
+            });
+
+            // Show charts view by default
+            document.getElementById('charts-view').style.display = 'block';
+            document.getElementById('screener-view').style.display = 'none';
+
             setTimeout(() => loadAllCharts(), 500);
         }
 
