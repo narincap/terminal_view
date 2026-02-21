@@ -4,7 +4,7 @@
       "memory": 1024,
       "maxDuration": 60
     },
-    "api/screener/momentum.py": {
+    "api/momentum.py": {
       "memory": 3008,
       "maxDuration": 60
     }
@@ -16,7 +16,7 @@
     },
     {
       "source": "/api/screener/momentum",
-      "destination": "/api/screener/momentum.py"
+      "destination": "/api/momentum.py"
     }
   ]
 }
