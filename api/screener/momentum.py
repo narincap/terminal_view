@@ -1,5 +1,5 @@
 """
-Momentum Screener API
+Momentum Screener API - Pure Python (no heavy dependencies)
 Finds stocks in early exponential breakout phase with high return potential
 
 Endpoint: /api/screener/momentum
@@ -9,13 +9,12 @@ Returns: Top ranked stocks based on exponential pattern + potential return
 from http.server import BaseHTTPRequestHandler
 import json
 import yfinance as yf
-import numpy as np
 import traceback
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
-            # Get top stocks to analyze (curated list of liquid stocks)
+            # Get top stocks to analyze
             stocks_to_analyze = self.get_stock_universe()
 
             print(f"Analyzing {len(stocks_to_analyze)} stocks...")
@@ -101,8 +100,12 @@ class handler(BaseHTTPRequestHandler):
             {'symbol': 'AMD', 'name': 'Advanced Micro Devices', 'exchange': 'NASDAQ'},
         ]
 
+    def mean(self, values):
+        """Calculate mean without numpy"""
+        return sum(values) / len(values) if values else 0
+
     def calculate_exponential_score(self, prices):
-        """Calculate exponential growth score (0-100) using simple math"""
+        """Calculate exponential growth score (0-100) using pure Python"""
         if len(prices) < 20:
             return 0
 
@@ -118,8 +121,9 @@ class handler(BaseHTTPRequestHandler):
                 return 0
 
             # Exponential pattern: gains should be accelerating
-            avg_early = np.mean(gains[:len(gains)//2])
-            avg_late = np.mean(gains[len(gains)//2:])
+            mid = len(gains) // 2
+            avg_early = self.mean(gains[:mid])
+            avg_late = self.mean(gains[mid:])
 
             # Check if recent gains are higher (acceleration)
             acceleration = avg_late - avg_early
@@ -145,17 +149,16 @@ class handler(BaseHTTPRequestHandler):
             print(f"Error calculating exponential score: {e}")
             return 0
 
-    def calculate_potential_return(self, hist, pattern_scores):
-        """Calculate potential return percentage (0-500+)"""
+    def calculate_potential_return(self, prices, pattern_scores):
+        """Calculate potential return percentage (0-500+) using pure Python"""
         try:
-            if hist.empty or len(hist) < 60:
+            if len(prices) < 60:
                 return 0
 
-            prices = hist['Close'].values
             current_price = prices[-1]
 
             # Find 52-week low
-            low_52w = np.min(prices)
+            low_52w = min(prices)
             distance_from_low = ((current_price - low_52w) / low_52w) * 100
 
             # Calculate recent momentum (3 months)
@@ -167,7 +170,7 @@ class handler(BaseHTTPRequestHandler):
 
             # Calculate monthly velocity
             monthly_gains = []
-            for months_back in range(1, min(7, len(prices)//21)):
+            for months_back in range(1, min(7, len(prices) // 21)):
                 lookback = months_back * 21
                 if lookback < len(prices):
                     old_price = prices[-lookback]
@@ -175,7 +178,7 @@ class handler(BaseHTTPRequestHandler):
                         gain = ((current_price - old_price) / old_price) * 100
                         monthly_gains.append(gain / months_back)
 
-            avg_monthly_gain = np.mean(monthly_gains) if monthly_gains else 0
+            avg_monthly_gain = self.mean(monthly_gains) if monthly_gains else 0
 
             # Project forward 6 months
             potential = avg_monthly_gain * 6
@@ -189,7 +192,7 @@ class handler(BaseHTTPRequestHandler):
                 potential *= 1.2
 
             # Average with pattern scores
-            avg_pattern = np.mean(list(pattern_scores.values())) if pattern_scores else 0
+            avg_pattern = self.mean(list(pattern_scores.values())) if pattern_scores else 0
             potential = (potential * 0.7) + (avg_pattern * 0.3)
 
             return min(500, max(0, potential))
@@ -208,19 +211,22 @@ class handler(BaseHTTPRequestHandler):
             if hist.empty or len(hist) < 60:
                 return None
 
+            # Convert to plain Python list
+            prices = [float(p) for p in hist['Close'].values]
+
             # Analyze multiple timeframes
             timeframes = {
                 '1M': 21,
                 '2M': 42,
                 '3M': 63,
                 '6M': 126,
-                '1Y': min(252, len(hist))
+                '1Y': min(252, len(prices))
             }
 
             pattern_scores = {}
             for tf_name, days in timeframes.items():
-                if days <= len(hist):
-                    data = hist['Close'].iloc[-days:].values
+                if days <= len(prices):
+                    data = prices[-days:]
                     score = self.calculate_exponential_score(data)
                     pattern_scores[tf_name] = score
 
@@ -228,10 +234,10 @@ class handler(BaseHTTPRequestHandler):
                 return None
 
             # Calculate average pattern score
-            avg_pattern = np.mean(list(pattern_scores.values()))
+            avg_pattern = self.mean(list(pattern_scores.values()))
 
             # Calculate potential return
-            potential_return = self.calculate_potential_return(hist, pattern_scores)
+            potential_return = self.calculate_potential_return(prices, pattern_scores)
 
             # Final score: 30% pattern quality + 70% return potential
             final_score = (avg_pattern * 0.3) + (potential_return * 0.7)
