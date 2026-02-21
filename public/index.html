@@ -341,7 +341,7 @@
                 console.log('🔄 Fetching stock list from backend...');
                 updateDatabaseStatus('Loading database...');
 
-                const response = await fetch('/api/stocks/list');
+                const response = await fetch('/stocks-database.json');
 
                 if (!response.ok) {
                     throw new Error('API returned ' + response.status + ': ' + response.statusText);
