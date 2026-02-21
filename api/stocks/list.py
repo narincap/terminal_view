@@ -6,6 +6,7 @@ Returns: JSON array of stocks with metadata (symbol, name, exchange, sector, ind
 
 from http.server import BaseHTTPRequestHandler
 import json
+import gzip
 
 class handler(BaseHTTPRequestHandler):
     """Serverless function handler for Vercel."""
@@ -846,12 +847,21 @@ class handler(BaseHTTPRequestHandler):
                 "stocks": stocks
             }
 
+            # Convert to JSON
+            json_data = json.dumps(response)
+            json_bytes = json_data.encode('utf-8')
+
+            # Compress with gzip
+            compressed_data = gzip.compress(json_bytes, compresslevel=6)
+
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
+            self.send_header('Content-Encoding', 'gzip')
+            self.send_header('Content-Length', str(len(compressed_data)))
             self.send_header('Access-Control-Allow-Origin', '*')
             self.send_header('Cache-Control', 'public, max-age=86400')
             self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            self.wfile.write(compressed_data)
 
         except Exception as e:
             print(f"Error: {str(e)}")
