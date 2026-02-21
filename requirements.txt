@@ -1,5 +1,4 @@
 yfinance
 brotli
 numpy
-scipy
 pandas

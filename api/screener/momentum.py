@@ -10,17 +10,12 @@ from http.server import BaseHTTPRequestHandler
 import json
 import yfinance as yf
 import numpy as np
-from scipy.optimize import curve_fit
-from scipy.stats import linregress
-import pandas as pd
-from datetime import datetime, timedelta
 import traceback
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
-            # Get top stocks to analyze (for now, analyze a curated list)
-            # In production, this would analyze more stocks in batches
+            # Get top stocks to analyze (curated list of liquid stocks)
             stocks_to_analyze = self.get_stock_universe()
 
             print(f"Analyzing {len(stocks_to_analyze)} stocks...")
@@ -48,251 +43,215 @@ class handler(BaseHTTPRequestHandler):
             top_results = results[:100]
 
             # Add rank
-            for i, result in enumerate(top_results):
-                result['rank'] = i + 1
+            for i, stock in enumerate(top_results):
+                stock['rank'] = i + 1
 
             response = {
                 'success': True,
+                'stocks': top_results,
                 'count': len(top_results),
-                'analyzed': len(stocks_to_analyze),
-                'timestamp': datetime.now().isoformat(),
-                'stocks': top_results
+                'analyzed': len(stocks_to_analyze)
             }
 
             self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
-            self.send_header('Cache-Control', 'public, max-age=3600')  # Cache for 1 hour
             self.end_headers()
             self.wfile.write(json.dumps(response).encode())
 
         except Exception as e:
-            print(f"Error in screener: {e}")
-            traceback.print_exc()
-
+            print(f"Fatal error: {traceback.format_exc()}")
             self.send_response(500)
-            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
-            error_response = json.dumps({
+            self.wfile.write(json.dumps({
                 'success': False,
                 'error': str(e),
-                'message': 'Failed to run momentum screener'
-            })
-            self.wfile.write(error_response.encode())
+                'traceback': traceback.format_exc()
+            }).encode())
 
     def get_stock_universe(self):
-        """Get list of stocks to analyze"""
-        # For initial version, analyze popular stocks from major markets
-        # This will be expanded to use the full database
-
-        stocks = [
-            # US Tech
-            {'symbol': 'NVDA', 'name': 'NVIDIA Corporation', 'exchange': 'NASDAQ'},
-            {'symbol': 'AMD', 'name': 'Advanced Micro Devices', 'exchange': 'NASDAQ'},
-            {'symbol': 'TSLA', 'name': 'Tesla Inc', 'exchange': 'NASDAQ'},
-            {'symbol': 'AAPL', 'name': 'Apple Inc', 'exchange': 'NASDAQ'},
+        """Get list of liquid stocks to analyze"""
+        return [
+            {'symbol': 'AAPL', 'name': 'Apple Inc.', 'exchange': 'NASDAQ'},
             {'symbol': 'MSFT', 'name': 'Microsoft Corporation', 'exchange': 'NASDAQ'},
-            {'symbol': 'GOOGL', 'name': 'Alphabet Inc', 'exchange': 'NASDAQ'},
-            {'symbol': 'META', 'name': 'Meta Platforms', 'exchange': 'NASDAQ'},
-            {'symbol': 'AMZN', 'name': 'Amazon.com Inc', 'exchange': 'NASDAQ'},
-
-            # Indonesian stocks
-            {'symbol': 'BBCA.JK', 'name': 'Bank Central Asia', 'exchange': 'IDX'},
-            {'symbol': 'BBRI.JK', 'name': 'Bank Rakyat Indonesia', 'exchange': 'IDX'},
-            {'symbol': 'BMRI.JK', 'name': 'Bank Mandiri', 'exchange': 'IDX'},
-            {'symbol': 'TLKM.JK', 'name': 'Telkom Indonesia', 'exchange': 'IDX'},
-            {'symbol': 'ASII.JK', 'name': 'Astra International', 'exchange': 'IDX'},
-            {'symbol': 'GOTO.JK', 'name': 'GoTo Gojek Tokopedia', 'exchange': 'IDX'},
-            {'symbol': 'VISI.JK', 'name': 'Satu Visi Putra Tbk', 'exchange': 'IDX'},
-
-            # More sectors
-            {'symbol': 'LLY', 'name': 'Eli Lilly and Company', 'exchange': 'NYSE'},
+            {'symbol': 'GOOGL', 'name': 'Alphabet Inc.', 'exchange': 'NASDAQ'},
+            {'symbol': 'AMZN', 'name': 'Amazon.com Inc.', 'exchange': 'NASDAQ'},
+            {'symbol': 'NVDA', 'name': 'NVIDIA Corporation', 'exchange': 'NASDAQ'},
+            {'symbol': 'META', 'name': 'Meta Platforms Inc.', 'exchange': 'NASDAQ'},
+            {'symbol': 'TSLA', 'name': 'Tesla Inc.', 'exchange': 'NASDAQ'},
+            {'symbol': 'BRK-B', 'name': 'Berkshire Hathaway', 'exchange': 'NYSE'},
+            {'symbol': 'V', 'name': 'Visa Inc.', 'exchange': 'NYSE'},
+            {'symbol': 'JNJ', 'name': 'Johnson & Johnson', 'exchange': 'NYSE'},
+            {'symbol': 'WMT', 'name': 'Walmart Inc.', 'exchange': 'NYSE'},
             {'symbol': 'JPM', 'name': 'JPMorgan Chase', 'exchange': 'NYSE'},
-            {'symbol': 'V', 'name': 'Visa Inc', 'exchange': 'NYSE'},
-            {'symbol': 'MA', 'name': 'Mastercard Inc', 'exchange': 'NYSE'},
+            {'symbol': 'MA', 'name': 'Mastercard Inc.', 'exchange': 'NYSE'},
+            {'symbol': 'PG', 'name': 'Procter & Gamble', 'exchange': 'NYSE'},
+            {'symbol': 'UNH', 'name': 'UnitedHealth Group', 'exchange': 'NYSE'},
+            {'symbol': 'HD', 'name': 'Home Depot', 'exchange': 'NYSE'},
+            {'symbol': 'DIS', 'name': 'Walt Disney Company', 'exchange': 'NYSE'},
+            {'symbol': 'BAC', 'name': 'Bank of America', 'exchange': 'NYSE'},
+            {'symbol': 'ADBE', 'name': 'Adobe Inc.', 'exchange': 'NASDAQ'},
+            {'symbol': 'CRM', 'name': 'Salesforce Inc.', 'exchange': 'NYSE'},
+            {'symbol': 'NFLX', 'name': 'Netflix Inc.', 'exchange': 'NASDAQ'},
+            {'symbol': 'CSCO', 'name': 'Cisco Systems', 'exchange': 'NASDAQ'},
+            {'symbol': 'INTC', 'name': 'Intel Corporation', 'exchange': 'NASDAQ'},
+            {'symbol': 'PEP', 'name': 'PepsiCo Inc.', 'exchange': 'NASDAQ'},
+            {'symbol': 'AMD', 'name': 'Advanced Micro Devices', 'exchange': 'NASDAQ'},
         ]
 
-        return stocks
-
-    def analyze_stock(self, symbol):
-        """Analyze a single stock for exponential pattern and return potential"""
-
-        # Fetch 1 year of data
-        ticker = yf.Ticker(symbol)
-        hist = ticker.history(period='1y', interval='1d')
-
-        if len(hist) < 60:  # Need at least 60 days
-            return None
-
-        # Get current price
-        current_price = hist['Close'].iloc[-1]
-
-        # Analyze multiple timeframes
-        timeframes = {
-            '1M': 21,   # ~21 trading days
-            '2M': 42,
-            '3M': 63,
-            '6M': 126,
-            '1Y': 252
-        }
-
-        pattern_scores = {}
-
-        for tf_name, days in timeframes.items():
-            if len(hist) >= days:
-                data = hist['Close'].iloc[-days:].values
-                score = self.calculate_exponential_score(data)
-                pattern_scores[tf_name] = score
-
-        # Average pattern quality
-        avg_pattern = np.mean(list(pattern_scores.values())) if pattern_scores else 0
-
-        # Calculate potential return
-        potential_return = self.calculate_potential_return(hist, pattern_scores)
-
-        # Final score: 30% pattern + 70% potential return
-        final_score = (avg_pattern * 0.3) + (potential_return * 0.7)
-
-        # Get mini chart data (last 6 months)
-        chart_data = hist['Close'].iloc[-126:].tolist()
-
-        return {
-            'symbol': symbol,
-            'price': round(current_price, 2),
-            'pattern_score': round(avg_pattern, 1),
-            'potential_return': round(potential_return, 1),
-            'final_score': round(final_score, 2),
-            'timeframe_scores': {k: round(v, 1) for k, v in pattern_scores.items()},
-            'chart_data': chart_data,
-            'projected_price': round(current_price * (1 + potential_return/100), 2)
-        }
-
     def calculate_exponential_score(self, prices):
-        """Calculate how well the price fits an exponential curve (0-100)"""
-
-        if len(prices) < 10:
-            return 0
-
-        x = np.arange(len(prices))
-        y = prices
-
-        # Remove any NaN or inf values
-        mask = np.isfinite(y)
-        x = x[mask]
-        y = y[mask]
-
-        if len(x) < 10:
+        """Calculate exponential growth score (0-100) using simple math"""
+        if len(prices) < 20:
             return 0
 
         try:
-            # Exponential function: a * e^(b*x)
-            def exp_func(x, a, b):
-                return a * np.exp(b * x)
+            # Calculate percentage gains over time
+            gains = []
+            for i in range(5, len(prices), 5):
+                if prices[i-5] > 0:
+                    gain = ((prices[i] - prices[i-5]) / prices[i-5]) * 100
+                    gains.append(gain)
 
-            # Fit exponential curve
-            popt_exp, _ = curve_fit(exp_func, x, y, p0=[y[0], 0.01], maxfev=5000)
-            y_exp_fit = exp_func(x, *popt_exp)
+            if not gains or len(gains) < 2:
+                return 0
 
-            # Calculate R² for exponential fit
-            ss_res_exp = np.sum((y - y_exp_fit) ** 2)
-            ss_tot = np.sum((y - np.mean(y)) ** 2)
-            r2_exp = 1 - (ss_res_exp / ss_tot) if ss_tot > 0 else 0
+            # Exponential pattern: gains should be accelerating
+            avg_early = np.mean(gains[:len(gains)//2])
+            avg_late = np.mean(gains[len(gains)//2:])
 
-            # Linear fit for comparison
-            slope, intercept, _, _, _ = linregress(x, y)
-            y_lin_fit = slope * x + intercept
-            ss_res_lin = np.sum((y - y_lin_fit) ** 2)
-            r2_lin = 1 - (ss_res_lin / ss_tot) if ss_tot > 0 else 0
+            # Check if recent gains are higher (acceleration)
+            acceleration = avg_late - avg_early
 
-            # Score based on:
-            # 1. Exponential R² quality (0-100)
-            # 2. Exponential fits better than linear
-            # 3. Positive growth (b > 0)
+            # Check consistency (all gains should be positive)
+            positive_count = sum(1 for g in gains if g > 0)
+            consistency = (positive_count / len(gains)) * 100
 
-            score = 0
+            # Calculate recent slope
+            recent_prices = prices[-20:]
+            if len(recent_prices) > 1:
+                slope = (recent_prices[-1] - recent_prices[0]) / len(recent_prices)
+                slope_score = min(100, max(0, slope * 10))
+            else:
+                slope_score = 0
 
-            if r2_exp > 0.7:  # Good exponential fit
-                score += r2_exp * 70  # Up to 70 points for fit quality
-
-            if r2_exp > r2_lin and popt_exp[1] > 0:  # Exponential better than linear AND growing
-                score += 30  # 30 bonus points
+            # Final exponential score
+            score = (consistency * 0.4) + (min(100, max(0, acceleration * 5)) * 0.3) + (slope_score * 0.3)
 
             return min(100, max(0, score))
 
         except Exception as e:
-            # If curve fitting fails, return 0
+            print(f"Error calculating exponential score: {e}")
             return 0
 
     def calculate_potential_return(self, hist, pattern_scores):
         """Calculate potential return percentage (0-500+)"""
+        try:
+            if hist.empty or len(hist) < 60:
+                return 0
 
-        if len(hist) < 63:
+            prices = hist['Close'].values
+            current_price = prices[-1]
+
+            # Find 52-week low
+            low_52w = np.min(prices)
+            distance_from_low = ((current_price - low_52w) / low_52w) * 100
+
+            # Calculate recent momentum (3 months)
+            if len(prices) >= 63:
+                price_3m_ago = prices[-63]
+                recent_gain = ((current_price - price_3m_ago) / price_3m_ago) * 100
+            else:
+                recent_gain = 0
+
+            # Calculate monthly velocity
+            monthly_gains = []
+            for months_back in range(1, min(7, len(prices)//21)):
+                lookback = months_back * 21
+                if lookback < len(prices):
+                    old_price = prices[-lookback]
+                    if old_price > 0:
+                        gain = ((current_price - old_price) / old_price) * 100
+                        monthly_gains.append(gain / months_back)
+
+            avg_monthly_gain = np.mean(monthly_gains) if monthly_gains else 0
+
+            # Project forward 6 months
+            potential = avg_monthly_gain * 6
+
+            # Bonus for early stage (closer to 52w low = more upside potential)
+            if distance_from_low < 200:
+                potential *= 1.5
+
+            # Bonus for acceleration
+            if recent_gain > avg_monthly_gain:
+                potential *= 1.2
+
+            # Average with pattern scores
+            avg_pattern = np.mean(list(pattern_scores.values())) if pattern_scores else 0
+            potential = (potential * 0.7) + (avg_pattern * 0.3)
+
+            return min(500, max(0, potential))
+
+        except Exception as e:
+            print(f"Error calculating potential return: {e}")
             return 0
 
-        # Get recent performance
-        price_3m_ago = hist['Close'].iloc[-63]
-        current_price = hist['Close'].iloc[-1]
-        recent_gain = ((current_price - price_3m_ago) / price_3m_ago) * 100
+    def analyze_stock(self, symbol):
+        """Analyze a single stock"""
+        try:
+            # Fetch 1 year of data
+            ticker = yf.Ticker(symbol)
+            hist = ticker.history(period='1y')
 
-        # Get distance from 1-year low
-        year_low = hist['Close'].min()
-        distance_from_low = ((current_price - year_low) / year_low) * 100
+            if hist.empty or len(hist) < 60:
+                return None
 
-        # Calculate velocity (monthly gain rate)
-        monthly_gains = []
-        for i in range(1, 7):  # Last 6 months
-            days = i * 21
-            if len(hist) >= days + 21:
-                month_ago_price = hist['Close'].iloc[-(days + 21)]
-                month_price = hist['Close'].iloc[-days] if days > 0 else current_price
-                if month_ago_price > 0:
-                    gain = ((month_price - month_ago_price) / month_ago_price) * 100
-                    monthly_gains.append(gain)
+            # Analyze multiple timeframes
+            timeframes = {
+                '1M': 21,
+                '2M': 42,
+                '3M': 63,
+                '6M': 126,
+                '1Y': min(252, len(hist))
+            }
 
-        avg_monthly_gain = np.mean(monthly_gains) if monthly_gains else 0
+            pattern_scores = {}
+            for tf_name, days in timeframes.items():
+                if days <= len(hist):
+                    data = hist['Close'].iloc[-days:].values
+                    score = self.calculate_exponential_score(data)
+                    pattern_scores[tf_name] = score
 
-        # Acceleration (is it speeding up?)
-        acceleration = 0
-        if len(monthly_gains) >= 3:
-            recent_avg = np.mean(monthly_gains[:3])
-            older_avg = np.mean(monthly_gains[3:])
-            acceleration = recent_avg - older_avg
+            if not pattern_scores:
+                return None
 
-        # Average pattern quality across timeframes
-        avg_pattern = np.mean(list(pattern_scores.values())) if pattern_scores else 0
+            # Calculate average pattern score
+            avg_pattern = np.mean(list(pattern_scores.values()))
 
-        # Calculate potential return
-        # Formula: Base on recent momentum + acceleration + pattern quality
+            # Calculate potential return
+            potential_return = self.calculate_potential_return(hist, pattern_scores)
 
-        potential = 0
+            # Final score: 30% pattern quality + 70% return potential
+            final_score = (avg_pattern * 0.3) + (potential_return * 0.7)
 
-        # If showing strong exponential pattern and positive momentum
-        if avg_pattern > 60 and avg_monthly_gain > 0:
-            # Project 6 months forward
-            projected_months = 6
+            # Only include stocks with decent scores
+            if final_score < 20:
+                return None
 
-            # Conservative: Current monthly rate
-            conservative = avg_monthly_gain * projected_months
+            return {
+                'symbol': symbol,
+                'pattern_score': round(avg_pattern, 2),
+                'potential_return': round(potential_return, 2),
+                'final_score': round(final_score, 2),
+                'timeframe_scores': {k: round(v, 2) for k, v in pattern_scores.items()},
+                'current_price': round(float(hist['Close'].iloc[-1]), 2)
+            }
 
-            # With acceleration
-            if acceleration > 0:
-                accelerated = conservative * (1 + acceleration/100)
-            else:
-                accelerated = conservative
-
-            # Adjust based on how early we are (more potential if just started)
-            if distance_from_low < 200:  # Less than 3x from low = early
-                early_bonus = 1.5
-            elif distance_from_low < 400:  # 3-5x from low = mid
-                early_bonus = 1.2
-            else:  # Already up a lot
-                early_bonus = 0.8
-
-            potential = accelerated * early_bonus
-
-        # Cap potential return at 500%
-        return min(500, max(0, potential))
+        except Exception as e:
+            print(f"Error analyzing {symbol}: {e}")
+            return None
 
     def do_OPTIONS(self):
         """Handle CORS preflight"""
