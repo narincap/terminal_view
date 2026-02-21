@@ -1,5 +1,5 @@
 """
-Momentum Screener API - Pure Python (no heavy dependencies)
+Momentum Screener API - Ultra-lightweight (no yfinance/pandas/numpy)
 Finds stocks in early exponential breakout phase with high return potential
 
 Endpoint: /api/screener/momentum
@@ -8,7 +8,9 @@ Returns: Top ranked stocks based on exponential pattern + potential return
 
 from http.server import BaseHTTPRequestHandler
 import json
-import yfinance as yf
+import urllib.request
+import urllib.parse
+from datetime import datetime, timedelta
 import traceback
 
 class handler(BaseHTTPRequestHandler):
@@ -23,7 +25,7 @@ class handler(BaseHTTPRequestHandler):
             results = []
             for i, stock_info in enumerate(stocks_to_analyze):
                 try:
-                    if i % 10 == 0:
+                    if i % 5 == 0:
                         print(f"Progress: {i}/{len(stocks_to_analyze)}")
 
                     score = self.analyze_stock(stock_info['symbol'])
@@ -38,8 +40,8 @@ class handler(BaseHTTPRequestHandler):
             # Sort by final score (descending)
             results.sort(key=lambda x: x['final_score'], reverse=True)
 
-            # Take top 100
-            top_results = results[:100]
+            # Take top 50
+            top_results = results[:50]
 
             # Add rank
             for i, stock in enumerate(top_results):
@@ -93,19 +95,57 @@ class handler(BaseHTTPRequestHandler):
             {'symbol': 'BAC', 'name': 'Bank of America', 'exchange': 'NYSE'},
             {'symbol': 'ADBE', 'name': 'Adobe Inc.', 'exchange': 'NASDAQ'},
             {'symbol': 'CRM', 'name': 'Salesforce Inc.', 'exchange': 'NYSE'},
-            {'symbol': 'NFLX', 'name': 'Netflix Inc.', 'exchange': 'NASDAQ'},
-            {'symbol': 'CSCO', 'name': 'Cisco Systems', 'exchange': 'NASDAQ'},
-            {'symbol': 'INTC', 'name': 'Intel Corporation', 'exchange': 'NASDAQ'},
-            {'symbol': 'PEP', 'name': 'PepsiCo Inc.', 'exchange': 'NASDAQ'},
-            {'symbol': 'AMD', 'name': 'Advanced Micro Devices', 'exchange': 'NASDAQ'},
         ]
 
+    def fetch_stock_data(self, symbol):
+        """Fetch stock data using Yahoo Finance CSV API (no dependencies)"""
+        try:
+            # Calculate date range (1 year ago to today)
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=365)
+
+            # Convert to Unix timestamps
+            period1 = int(start_date.timestamp())
+            period2 = int(end_date.timestamp())
+
+            # Yahoo Finance CSV endpoint
+            url = f"https://query1.finance.yahoo.com/v7/finance/download/{symbol}?period1={period1}&period2={period2}&interval=1d&events=history"
+
+            # Fetch data
+            req = urllib.request.Request(url)
+            req.add_header('User-Agent', 'Mozilla/5.0')
+
+            with urllib.request.urlopen(req, timeout=10) as response:
+                data = response.read().decode('utf-8')
+
+            # Parse CSV (simple parsing without csv module)
+            lines = data.strip().split('\n')
+            if len(lines) < 2:
+                return None
+
+            # Skip header, get prices
+            prices = []
+            for line in lines[1:]:
+                parts = line.split(',')
+                if len(parts) >= 5:
+                    try:
+                        close_price = float(parts[4])  # Close is 5th column
+                        prices.append(close_price)
+                    except (ValueError, IndexError):
+                        continue
+
+            return prices if len(prices) >= 60 else None
+
+        except Exception as e:
+            print(f"Error fetching {symbol}: {e}")
+            return None
+
     def mean(self, values):
-        """Calculate mean without numpy"""
+        """Calculate mean"""
         return sum(values) / len(values) if values else 0
 
     def calculate_exponential_score(self, prices):
-        """Calculate exponential growth score (0-100) using pure Python"""
+        """Calculate exponential growth score (0-100)"""
         if len(prices) < 20:
             return 0
 
@@ -128,7 +168,7 @@ class handler(BaseHTTPRequestHandler):
             # Check if recent gains are higher (acceleration)
             acceleration = avg_late - avg_early
 
-            # Check consistency (all gains should be positive)
+            # Check consistency
             positive_count = sum(1 for g in gains if g > 0)
             consistency = (positive_count / len(gains)) * 100
 
@@ -150,7 +190,7 @@ class handler(BaseHTTPRequestHandler):
             return 0
 
     def calculate_potential_return(self, prices, pattern_scores):
-        """Calculate potential return percentage (0-500+) using pure Python"""
+        """Calculate potential return percentage (0-500+)"""
         try:
             if len(prices) < 60:
                 return 0
@@ -183,7 +223,7 @@ class handler(BaseHTTPRequestHandler):
             # Project forward 6 months
             potential = avg_monthly_gain * 6
 
-            # Bonus for early stage (closer to 52w low = more upside potential)
+            # Bonus for early stage
             if distance_from_low < 200:
                 potential *= 1.5
 
@@ -204,15 +244,11 @@ class handler(BaseHTTPRequestHandler):
     def analyze_stock(self, symbol):
         """Analyze a single stock"""
         try:
-            # Fetch 1 year of data
-            ticker = yf.Ticker(symbol)
-            hist = ticker.history(period='1y')
+            # Fetch price data
+            prices = self.fetch_stock_data(symbol)
 
-            if hist.empty or len(hist) < 60:
+            if not prices or len(prices) < 60:
                 return None
-
-            # Convert to plain Python list
-            prices = [float(p) for p in hist['Close'].values]
 
             # Analyze multiple timeframes
             timeframes = {
@@ -252,7 +288,7 @@ class handler(BaseHTTPRequestHandler):
                 'potential_return': round(potential_return, 2),
                 'final_score': round(final_score, 2),
                 'timeframe_scores': {k: round(v, 2) for k, v in pattern_scores.items()},
-                'current_price': round(float(hist['Close'].iloc[-1]), 2)
+                'current_price': round(prices[-1], 2)
             }
 
         except Exception as e:
